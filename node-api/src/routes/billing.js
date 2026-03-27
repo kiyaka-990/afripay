@@ -62,7 +62,9 @@ router.post('/subscribe', async (req, res) => {
       subscription_id: subscription.id,
       plan,
       status:          subscription.status,
-      current_period_end: new Date(subscription.current_period_end * 1000).toISOString()
+      current_period_end: subscription.current_period_end
+        ? new Date(subscription.current_period_end * 1000).toISOString()
+        : null
     });
 
   } catch (err) {
@@ -145,3 +147,27 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
 });
 
 module.exports = router;
+
+// ─── GET /v1/billing/config ────────────────────────────────────────────────────
+// Returns Stripe publishable key + price IDs to the frontend (safe to expose)
+router.get('/config', (req, res) => {
+  const configured = !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PUBLISHABLE_KEY);
+  res.json({
+    success:        true,
+    configured,
+    publishable_key: process.env.STRIPE_PUBLISHABLE_KEY || null,
+    prices: {
+      starter: process.env.STRIPE_PRICE_STARTER || null,
+      pro:     process.env.STRIPE_PRICE_PRO     || null,
+      ultra:   process.env.STRIPE_PRICE_ULTRA   || null,
+    },
+    setup_instructions: configured ? null : {
+      step1: 'Add STRIPE_PUBLISHABLE_KEY=pk_live_... to your .env',
+      step2: 'Add STRIPE_SECRET_KEY=sk_live_... to your .env',
+      step3: 'Create products in Stripe Dashboard → Products',
+      step4: 'Add STRIPE_PRICE_STARTER, STRIPE_PRICE_PRO, STRIPE_PRICE_ULTRA price IDs to .env',
+      step5: 'Run: npm install stripe',
+      docs:  'https://dashboard.stripe.com/products'
+    }
+  });
+});

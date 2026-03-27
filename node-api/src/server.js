@@ -1613,10 +1613,20 @@ async function submitSubscription() {
 
     if (data.success) {
       closeModal();
-      showToast(\`Upgraded to \${pendingPlan.id} plan!\`, 'success');
+      showToast(\`\${pendingPlan.id.charAt(0).toUpperCase() + pendingPlan.id.slice(1)} plan activated!\`, 'success');
       updatePlanUI(pendingPlan.id);
+    } else if (data.requires_action && data.payment_intent_secret) {
+      const result = await stripe.confirmCardPayment(data.payment_intent_secret);
+      if (result.error) {
+        errEl.textContent = result.error.message;
+      } else {
+        closeModal();
+        showToast(\`Plan upgraded successfully!\`, 'success');
+        updatePlanUI(pendingPlan.id);
+      }
     } else {
-      errEl.textContent = data.message || 'Payment failed. Please try again.';
+      const msg = data.message || data.error || 'Payment failed. Please try again.';
+      errEl.textContent = msg;
     }
   } catch(e) {
     errEl.textContent = 'Network error. Please try again.';
