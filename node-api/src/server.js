@@ -1277,7 +1277,7 @@ let STRIPE_CONFIG = { configured: false, publishable_key: null, prices: {} };
 
 async function loadStripeConfig() {
   try {
-    const res = await fetch('/v1/billing/config');
+    const res = await fetch('/billing/config');
     if (res.ok) STRIPE_CONFIG = await res.json();
   } catch(e) {
     console.warn('Could not load Stripe config from server');
@@ -1717,7 +1717,21 @@ app.get('/', serveDashboard);
 app.use('/health',             healthRoutes);
 app.use('/v1/webhooks',        webhookRoutes);
 app.use('/v1/billing/webhook', billingRoutes);
-app.use('/v1/billing/config',  billingRoutes);
+
+// Public config endpoint — no auth, safe (only returns publishable key + price IDs)
+app.get('/billing/config', (req, res) => {
+  const configured = !!(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PUBLISHABLE_KEY);
+  res.json({
+    success: true,
+    configured,
+    publishable_key: process.env.STRIPE_PUBLISHABLE_KEY || null,
+    prices: {
+      starter: process.env.STRIPE_PRICE_STARTER || null,
+      pro:     process.env.STRIPE_PRICE_PRO     || null,
+      ultra:   process.env.STRIPE_PRICE_ULTRA   || null,
+    }
+  });
+});
 
 // ─── Authenticated Routes ─────────────────────────────────────────────────────
 app.use('/v1', authenticate, rateLimiter);
