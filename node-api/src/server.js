@@ -60,11 +60,28 @@ app.use('/v1/billing',  billingRoutes);
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/v1') || req.path.startsWith('/health')) return next();
   const indexFile = path.join(dashboardPath, 'index.html');
-  res.sendFile(indexFile, err => {
-    if (err) {
-      logger.error(`Dashboard serve error: ${err.message} | path: ${indexFile}`);
-      res.status(500).json({ success: false, error: 'DASHBOARD_NOT_FOUND', message: `Dashboard not found at ${indexFile}` });
-    }
+  const fs = require('fs');
+
+  // Try all possible paths where dashboard could live
+  const candidates = [
+    indexFile,
+    path.resolve(__dirname, '..', 'dashboard', 'index.html'),       // /app/dashboard
+    path.resolve(__dirname, '..', '..', 'dashboard', 'index.html'), // dev: afripay/dashboard
+    path.resolve(process.cwd(), 'dashboard', 'index.html'),         // cwd/dashboard
+  ];
+
+  const found = candidates.find(p => { try { return fs.existsSync(p); } catch { return false; } });
+
+  if (found) {
+    return res.sendFile(found);
+  }
+
+  logger.error(`Dashboard not found. Tried: ${candidates.join(', ')}`);
+  res.status(500).json({
+    success: false,
+    error: 'DASHBOARD_NOT_FOUND',
+    message: `Dashboard not found at ${indexFile}`,
+    tried: candidates
   });
 });
 

@@ -1,0 +1,10 @@
+node-api/node_modules
+node-api/.env
+node-api/.env.*
+node-api/coverage/
+node-api/*.log
+rust-core/target/
+*.zip
+*.tar.gz
+.git/
+.DS_Store
