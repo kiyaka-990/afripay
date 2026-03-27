@@ -23,8 +23,11 @@ const { requestId }    = require('./middleware/requestId');
 
 const app = express();
 
-// dashboard is at afripay/dashboard/ — two levels up from node-api/src/
-const dashboardPath = path.resolve(__dirname, '..', '..', 'dashboard');
+// In Docker: dashboard/ is at /app/dashboard/ (same level as src/)
+// In dev:    dashboard/ is two levels up from node-api/src/
+const dashboardPath = process.env.NODE_ENV === 'production'
+  ? path.resolve(__dirname, '..', 'dashboard')           // /app/dashboard
+  : path.resolve(__dirname, '..', '..', 'dashboard');    // afripay/dashboard
 
 // ─── Security & Parsing ───────────────────────────────────────────────────────
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -42,6 +45,7 @@ app.use('/health',      healthRoutes);
 app.use('/v1/webhooks', webhookRoutes);
 // Stripe webhook needs raw body — must be before authenticated routes
 app.use('/v1/billing/webhook', billingRoutes);
+app.use('/v1/billing/config',  billingRoutes);  // public — no auth
 
 // ─── Authenticated Routes ─────────────────────────────────────────────────────
 app.use('/v1', authenticate, rateLimiter);
