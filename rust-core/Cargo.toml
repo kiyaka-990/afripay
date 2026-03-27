@@ -1,0 +1,32 @@
+[package]
+name    = "afripay-core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name       = "afripay_core"
+crate-type = ["cdylib", "rlib"]   # rlib enables `cargo test`; cdylib for Node.js addon
+
+[dependencies]
+# Crypto / signing
+hmac    = "0.12"
+sha2    = "0.10"
+hex     = "0.4"
+
+# Base64 encoding (M-Pesa password generation)
+base64  = "0.22"
+
+# Timestamps
+chrono  = { version = "0.4", features = ["serde"] }
+
+# UUID generation (API key pairs)
+uuid    = { version = "1", features = ["v4"] }
+
+# Serialization
+serde       = { version = "1", features = ["derive"] }
+serde_json  = "1"
+
+[profile.release]
+lto           = true
+codegen-units = 1
+opt-level     = 3

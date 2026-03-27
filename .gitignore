@@ -1,0 +1,74 @@
+# ─── Environment & Secrets ────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# ─── Node.js ──────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+.pnpm-store/
+
+# ─── Rust ─────────────────────────────────────────────────────────────────────
+rust-core/target/
+rust-core/Cargo.lock
+**/*.rs.bk
+**/*.pdb
+
+# ─── Compiled Rust Node.js addon ──────────────────────────────────────────────
+rust-core/*.node
+node-api/src/**/*.node
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+logs/
+*.log
+*.log.*
+
+# ─── Test & Coverage ──────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+node-api/src/tests/__snapshots__/
+
+# ─── Build outputs ────────────────────────────────────────────────────────────
+dist/
+build/
+out/
+
+# ─── Docker ───────────────────────────────────────────────────────────────────
+.dockerignore
+
+# ─── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# ─── IDE / Editor ─────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ─── Stripe ───────────────────────────────────────────────────────────────────
+.stripe/
+
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+*.zip
+*.tar.gz
+.cache/
+tmp/
+temp/
