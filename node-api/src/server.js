@@ -1660,7 +1660,11 @@ async function submitSubscription() {
     // Send to your backend: POST /v1/billing/subscribe
     const res = await fetch('/v1/billing/subscribe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': \`Bearer \${DEMO_KEY}\` },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': \`Bearer \${API_KEY}\`,
+        'X-Session-Token': SESSION_TOKEN || ''
+      },
       body: JSON.stringify({ payment_method_id: paymentMethod.id, price_id: pendingPlan.stripePriceId, plan: pendingPlan.id })
     });
 

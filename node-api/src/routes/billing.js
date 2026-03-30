@@ -18,20 +18,41 @@ router.post('/subscribe', async (req, res) => {
     return res.status(503).json({
       success: false,
       error: 'STRIPE_NOT_CONFIGURED',
-      message: 'Add STRIPE_SECRET_KEY to .env and run npm install stripe'
+      message: 'Add STRIPE_SECRET_KEY to .env and run: npm install stripe'
     });
   }
 
   try {
     const { payment_method_id, price_id, plan, email } = req.body;
+    logger.info(`Subscribe attempt: plan=${plan} price_id=${price_id} key=...${req.apiKey?.slice(-6)}`);
 
-    if (!payment_method_id || !price_id) {
-      return res.status(400).json({ success: false, error: 'MISSING_PARAMS', message: 'payment_method_id and price_id are required' });
+    if (!payment_method_id) {
+      return res.status(400).json({ success: false, error: 'MISSING_PARAMS', message: 'payment_method_id is required' });
     }
+    if (!price_id) {
+      return res.status(400).json({ success: false, error: 'MISSING_PRICE_ID', message: 'price_id is required. Set STRIPE_PRICE_STARTER/PRO/ULTRA in Railway Variables.' });
+    }
+    if (!price_id.startsWith('price_')) {
+      return res.status(400).json({ success: false, error: 'INVALID_PRICE_ID', message: `price_id must start with price_, got: ${price_id}. Check Railway Variables.` });
+    }
+
+    // Get user email from session if provided
+    let customerEmail = email;
+    if (!customerEmail) {
+      const sessionToken = req.headers['x-session-token'];
+      if (sessionToken) {
+        try {
+          const { SESSIONS, USERS } = require('./auth');
+          const userEmail = SESSIONS.get(sessionToken);
+          if (userEmail) customerEmail = userEmail;
+        } catch(e) {}
+      }
+    }
+    customerEmail = customerEmail || `api_${req.apiKey?.slice(-8)}@afripayltd.com`;
 
     // In production: look up or create customer from your DB using req.apiKey
     const customer = await stripe.customers.create({
-      email: email || `api_${req.apiKey?.slice(-8)}@afripay.dev`,
+      email: customerEmail,
       payment_method: payment_method_id,
       invoice_settings: { default_payment_method: payment_method_id },
       metadata: { api_key: req.apiKey, plan }
