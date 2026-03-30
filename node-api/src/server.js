@@ -4,7 +4,6 @@ const express = require('express');
 const helmet  = require('helmet');
 const cors    = require('cors');
 const morgan  = require('morgan');
-const fs      = require('fs');
 const path    = require('path');
 const { logger } = require('./utils/logger');
 
@@ -16,6 +15,7 @@ const webhookRoutes  = require('./routes/webhooks');
 const keysRoutes     = require('./routes/keys');
 const healthRoutes   = require('./routes/health');
 const billingRoutes  = require('./routes/billing');
+const { router: authRoutes } = require('./routes/auth');
 
 const { rateLimiter }  = require('./middleware/rateLimiter');
 const { authenticate } = require('./middleware/authenticate');
@@ -24,9 +24,7 @@ const { requestId }    = require('./middleware/requestId');
 
 const app = express();
 
-// ─── Dashboard HTML ───────────────────────────────────────────────────────────
-// Embedded directly so deployment never depends on filesystem layout.
-// In local dev, the file version is preferred if it exists.
+// ─── Dashboard HTML (embedded) ────────────────────────────────────────────────
 const DASHBOARD_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -409,8 +407,21 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
 .toast.success { border-color:var(--green); }
 .toast.error { border-color:var(--red); }
 
-/* ── RESPONSIVE ── */
-@media(max-width:900px){
+  /* ── AUTH SCREEN ── */
+  .auth-screen { position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:999; }
+  .auth-box { background:var(--surface); border:1px solid var(--border2); border-radius:16px; padding:36px; width:100%; max-width:400px; }
+  .auth-title { font-family:var(--mono); font-size:18px; font-weight:700; margin-bottom:6px; text-align:center; }
+  .auth-sub { font-size:13px; color:var(--muted2); text-align:center; margin-bottom:24px; }
+  .auth-tabs { display:flex; margin-bottom:24px; background:var(--card); border-radius:8px; padding:3px; }
+  .auth-tab { flex:1; padding:8px; text-align:center; border-radius:6px; cursor:pointer; font-size:13px; font-weight:500; color:var(--muted2); border:none; background:none; transition:all .15s; font-family:var(--sans); }
+  .auth-tab.active { background:var(--green); color:#000; }
+  .auth-error { color:var(--red); font-size:12px; min-height:18px; text-align:center; margin-bottom:4px; }
+  .logout-btn { background:none; border:none; color:var(--muted); cursor:pointer; font-size:12px; padding:6px 10px; border-radius:6px; width:100%; text-align:left; font-family:var(--sans); transition:all .12s; }
+  .logout-btn:hover { background:var(--red-dim); color:var(--red); }
+  .user-info { padding:8px 12px; font-size:11px; color:var(--muted); font-family:var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-bottom:1px solid var(--border); margin-bottom:4px; }
+
+  /* ── RESPONSIVE ── */
+  @media(max-width:900px){
   .layout{grid-template-columns:1fr;}
   .sidebar{display:none;}
   .stats-row,.pricing-grid{grid-template-columns:repeat(2,1fr);}
@@ -442,6 +453,41 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
   </div>
 </div>
 
+<!-- AUTH SCREEN -->
+<div class="auth-screen" id="auth-screen" style="display:none;">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <div class="logo-hex" style="width:38px;height:38px;background:var(--green);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:14px;color:#000;">AP</div>
+      <div style="font-family:var(--mono);font-weight:700;font-size:18px;">AfriPay</div>
+    </div>
+    <div class="auth-title">Welcome back</div>
+    <div class="auth-sub">Sign in to your developer dashboard</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign In</button>
+      <button class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Register</button>
+    </div>
+    <div class="auth-form">
+      <div id="name-group" style="display:none;">
+        <label class="form-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600;font-family:var(--mono);display:block;margin-bottom:5px;">Full Name</label>
+        <input class="form-input" id="auth-name" placeholder="Your name" style="width:100%;">
+      </div>
+      <div>
+        <label class="form-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600;font-family:var(--mono);display:block;margin-bottom:5px;">Email</label>
+        <input class="form-input" id="auth-email" type="email" placeholder="you@company.com" style="width:100%;" onkeydown="if(event.key==='Enter')handleAuthForm(currentAuthMode)">
+      </div>
+      <div>
+        <label class="form-label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600;font-family:var(--mono);display:block;margin-bottom:5px;">Password</label>
+        <input class="form-input" id="auth-password" type="password" placeholder="Min 8 characters" style="width:100%;" onkeydown="if(event.key==='Enter')handleAuthForm(currentAuthMode)">
+      </div>
+      <div class="auth-error" id="auth-error"></div>
+      <button class="btn btn-green" id="auth-btn" onclick="handleAuthForm(currentAuthMode)" style="width:100%;justify-content:center;padding:11px;">Sign In</button>
+    </div>
+    <div class="auth-footer">By continuing you agree to AfriPay's <a>Terms of Service</a></div>
+  </div>
+</div>
+
+<!-- APP SCREEN -->
+<div id="app-screen" style="display:none;">
 <div class="layout">
   <!-- ── SIDEBAR ── -->
   <aside class="sidebar">
@@ -499,6 +545,8 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
     </div>
 
     <div class="sidebar-footer">
+      <div class="user-info" id="user-email-display">user@example.com</div>
+      <button class="logout-btn" onclick="logout()">⎋ Sign out</button>
       <div class="plan-badge">
         <div class="plan-badge-top">
           <div class="plan-tier pro" id="sidebar-plan">PRO</div>
@@ -557,7 +605,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--sans); font
             <div class="key-display" id="api-key-display">afp_live_••••••••••••••••••••••••</div>
             <button class="btn btn-ghost btn-sm" onclick="toggleKey()">Reveal</button>
             <button class="btn btn-ghost btn-sm" onclick="copyKey()">Copy</button>
-            <button class="btn btn-red btn-sm" onclick="showToast('New API key generated. Old key is now invalid.','success')">Rotate</button>
+            <button class="btn btn-red btn-sm" onclick="rotateKey()">Rotate</button>
           </div>
           <div class="key-meta">
             <span>🔒 HMAC-signed</span>
@@ -1260,12 +1308,16 @@ npm run test:coverage</pre>
 
   </main>
 </div>
+</div><!-- /app-screen -->
 
 <script>
 // ── STATE ──────────────────────────────────────────────────────────────────────
-const DEMO_KEY = 'afp_live_a3f9b2c1d4e5f6789abc0def1234';
-let keyRevealed = false;
-let currentPlan = { id: 'free', name: 'Free', price: 0 };
+// ── AUTH STATE ────────────────────────────────────────────────────────────────
+let SESSION_TOKEN = localStorage.getItem('afp_session') || null;
+let CURRENT_USER  = JSON.parse(localStorage.getItem('afp_user') || 'null');
+let API_KEY       = localStorage.getItem('afp_key') || null;
+let keyRevealed   = false;
+let currentPlan   = { id: (CURRENT_USER?.tier || 'free') };
 let stripe = null;
 let cardElement = null;
 let pendingPlan = null;
@@ -1323,11 +1375,14 @@ function showPage(id) {
 // ── API KEY ───────────────────────────────────────────────────────────────────
 function toggleKey() {
   keyRevealed = !keyRevealed;
-  document.getElementById('api-key-display').textContent = keyRevealed
-    ? DEMO_KEY : 'afp_live_••••••••••••••••••••••••••••';
+  const display = document.getElementById('api-key-display');
+  if (display) display.textContent = keyRevealed
+    ? (API_KEY || 'No key — please log in')
+    : 'afp_' + '•'.repeat(28);
 }
 function copyKey() {
-  navigator.clipboard?.writeText(DEMO_KEY);
+  if (!API_KEY) return showToast('No API key — please log in', 'error');
+  navigator.clipboard?.writeText(API_KEY);
   showToast('API key copied to clipboard', 'success');
 }
 
@@ -1686,8 +1741,158 @@ function animateCount(el, target, suffix='') {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
+// ── REAL AUTH FUNCTIONS ───────────────────────────────────────────────────────
+async function register(email, password, name) {
+  const res = await fetch('/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, name })
+  });
+  const data = await res.json();
+  if (data.success) {
+    SESSION_TOKEN = data.session_token;
+    CURRENT_USER  = data.user;
+    API_KEY       = data.api_key;
+    localStorage.setItem('afp_session', SESSION_TOKEN);
+    localStorage.setItem('afp_user',    JSON.stringify(CURRENT_USER));
+    localStorage.setItem('afp_key',     API_KEY);
+    currentPlan = { id: data.user.tier };
+  }
+  return data;
+}
+
+async function login(email, password) {
+  const res = await fetch('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await res.json();
+  if (data.success) {
+    SESSION_TOKEN = data.session_token;
+    CURRENT_USER  = data.user;
+    API_KEY       = data.api_key;
+    localStorage.setItem('afp_session', SESSION_TOKEN);
+    localStorage.setItem('afp_user',    JSON.stringify(CURRENT_USER));
+    localStorage.setItem('afp_key',     API_KEY);
+    currentPlan = { id: data.user.tier };
+  }
+  return data;
+}
+
+function logout() {
+  fetch('/auth/logout', {
+    method: 'POST',
+    headers: { 'X-Session-Token': SESSION_TOKEN || '' }
+  }).catch(() => {});
+  SESSION_TOKEN = null;
+  CURRENT_USER  = null;
+  API_KEY       = null;
+  localStorage.removeItem('afp_session');
+  localStorage.removeItem('afp_user');
+  localStorage.removeItem('afp_key');
+  showAuthScreen();
+}
+
+async function rotateKey() {
+  if (!SESSION_TOKEN) return showToast('Please log in first', 'error');
+  if (!confirm('Rotate your API key? Your current key will stop working immediately.')) return;
+  const res = await fetch('/auth/rotate-key', {
+    method: 'POST',
+    headers: { 'X-Session-Token': SESSION_TOKEN }
+  });
+  const data = await res.json();
+  if (data.success) {
+    API_KEY = data.api_key;
+    localStorage.setItem('afp_key', API_KEY);
+    // Update display
+    const display = document.getElementById('api-key-display');
+    if (display) display.textContent = 'afp_' + '•'.repeat(28);
+    keyRevealed = false;
+    showToast('API key rotated. Previous key is now invalid.', 'success');
+  } else {
+    showToast(data.message || 'Rotation failed', 'error');
+  }
+}
+
+function showAuthScreen() {
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('app-screen').style.display = 'none';
+}
+
+function showAppScreen() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'grid';
+  // Update UI with user info
+  const userEl = document.getElementById('user-email-display');
+  if (userEl && CURRENT_USER) userEl.textContent = CURRENT_USER.email;
+  const keyEl = document.getElementById('api-key-display');
+  if (keyEl) keyEl.textContent = 'afp_' + '•'.repeat(28);
+  const planEl = document.getElementById('sidebar-plan');
+  if (planEl) { planEl.textContent = (CURRENT_USER?.tier || 'free').toUpperCase(); planEl.className = 'plan-tier ' + (CURRENT_USER?.tier || 'free'); }
+}
+
+async function handleAuthForm(mode) {
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const name     = document.getElementById('auth-name')?.value?.trim();
+  const errEl    = document.getElementById('auth-error');
+  const btnEl    = document.getElementById('auth-btn');
+
+  if (!email || !password) { errEl.textContent = 'Email and password are required'; return; }
+  errEl.textContent = '';
+  btnEl.disabled = true;
+  btnEl.textContent = mode === 'login' ? 'Signing in…' : 'Creating account…';
+
+  const result = mode === 'login' ? await login(email, password) : await register(email, password, name);
+
+  btnEl.disabled = false;
+  btnEl.textContent = mode === 'login' ? 'Sign In' : 'Create Account';
+
+  if (result.success) {
+    showAppScreen();
+  } else {
+    errEl.textContent = result.message || 'Authentication failed';
+  }
+}
+
+let currentAuthMode = 'login';
+function switchAuthTab(mode) {
+  currentAuthMode = mode;
+  document.getElementById('tab-login').classList.toggle('active', mode === 'login');
+  document.getElementById('tab-register').classList.toggle('active', mode === 'register');
+  document.getElementById('name-group').style.display = mode === 'register' ? 'block' : 'none';
+  document.getElementById('auth-btn').textContent = mode === 'login' ? 'Sign In' : 'Create Account';
+  document.getElementById('auth-title') && (document.getElementById('auth-title').textContent = mode === 'login' ? 'Welcome back' : 'Create your account');
+  document.getElementById('auth-error').textContent = '';
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
   await loadStripeConfig();
+
+  // Check if already logged in
+  if (SESSION_TOKEN && CURRENT_USER) {
+    // Verify session is still valid
+    try {
+      const res = await fetch('/auth/me', { headers: { 'X-Session-Token': SESSION_TOKEN } });
+      if (res.ok) {
+        const data = await res.json();
+        CURRENT_USER = data.user;
+        API_KEY = data.api_key;
+        localStorage.setItem('afp_user', JSON.stringify(CURRENT_USER));
+        localStorage.setItem('afp_key', API_KEY);
+        showAppScreen();
+      } else {
+        logout();
+        showAuthScreen();
+      }
+    } catch(e) {
+      showAuthScreen();
+    }
+  } else {
+    showAuthScreen();
+  }
+
   renderCode();
   renderLogs();
   renderRecentTxns();
@@ -1727,6 +1932,7 @@ app.get('/', serveDashboard);
 app.use('/health',             healthRoutes);
 app.use('/v1/webhooks',        webhookRoutes);
 app.use('/v1/billing/webhook', billingRoutes);
+app.use('/auth',               authRoutes);   // register, login, logout, rotate-key — public
 
 // Public config endpoint — no auth, safe (only returns publishable key + price IDs)
 app.get('/billing/config', (req, res) => {
